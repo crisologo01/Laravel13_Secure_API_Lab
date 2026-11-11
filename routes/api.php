@@ -18,4 +18,26 @@ Route::post('/login', [AuthController::class, 'login'])
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/profile', [AuthController::class, 'profile']);
     Route::post('/logout', [AuthController::class, 'logout']);
+
+    Route::middleware(['role:admin,student'])->get('/students', function () {
+        return response()->json([
+            'message' => 'List of students',
+            'students' => [
+                ['id' => 1, 'name' => 'Juan Dela Cruz', 'email' => 'juan@example.com', 'role' => 'student'],
+                ['id' => 2, 'name' => 'Maria Clara', 'email' => 'maria@example.com', 'role' => 'student'],
+            ],
+        ]);
+    });
+
+    Route::middleware(['admin'])->get('/admin/dashboard', function () {
+        return response()->json([
+            'message' => 'Welcome Admin!',
+        ]);
+    });
+
+    Route::middleware(['role:student'])->get('/student/dashboard', function () {
+        return response()->json([
+            'message' => 'Welcome Student!',
+        ]);
+    });
 });

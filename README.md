@@ -1,58 +1,88 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Laravel 13 Secure API — Lab (Modules 5 & Lessons 1–2)
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+## Overview
 
-## About Laravel
+This repository contains a **Laravel 13** secure REST API laboratory covering:
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- **Module 5 — Lesson 1:** Secure API design, Sanctum personal access tokens, and token-based authentication (register, login, profile, logout).
+- **Module 5 — Lesson 2:** Role-based access control (RBAC) with custom middleware.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+The API is built with **Laravel 13**, **Laravel Sanctum** (Bearer tokens), **MySQL** (InnoDB), and tested with **Postman**.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## RBAC endpoints
 
-## Learning Laravel
+| Endpoint | Method | Middleware | Admin | Student | No token |
+|---|---|---|---|---|---|
+| `/api/hello` | GET | public | — | — | — |
+| `/api/register` | POST | throttle | — | — | — |
+| `/api/login` | POST | throttle | — | — | — |
+| `/api/profile` | GET/POST | `auth:sanctum` | 200 | 200 | 401 |
+| `/api/students` | GET | `auth:sanctum` + `role:admin,student` | 200 | 200 | 401 |
+| `/api/admin/dashboard` | GET | `auth:sanctum` + `admin` | 200 | 403 | 401 |
+| `/api/student/dashboard` | GET | `auth:sanctum` + `role:student` | 403 | 200 | 401 |
+| `/api/logout` | POST | `auth:sanctum` | — | — | — |
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+### Middleware
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+- `App\Http\Middleware\CheckRole` — variadic role middleware: accepts one or more allowed roles via `string ...$roles`; returns **401** when unauthenticated and **403** when the user's role is not allowed.
+- `App\Http\Middleware\AdminMiddleware` — admin-only middleware; returns **401** when unauthenticated and **403** when the user's role is not `admin`.
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+### Custom middleware aliases
 
-## Agentic Development
+Registered in `bootstrap/app.php`:
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
-
-```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+```php
+$middleware->alias([
+    'role' => \App\Http\Middleware\CheckRole::class,
+    'admin' => \App\Http\Middleware\AdminMiddleware::class,
+]);
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+### Protected routes (`routes/api.php`)
 
-## Contributing
+```php
+Route::middleware(['auth:sanctum'])->group(function () {
+    // /profile, /logout
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+    Route::middleware(['role:admin,student'])->get('/students', function () { /* fixed JSON array */ });
 
-## Code of Conduct
+    Route::middleware(['admin'])->get('/admin/dashboard', function () { /* Welcome Admin! */ });
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+    Route::middleware(['role:student'])->get('/student/dashboard', function () { /* Welcome Student! */ });
+});
+```
 
-## Security Vulnerabilities
+## Local testing steps
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+1. `cp .env.example .env`
+2. Configure MySQL credentials (database `demo_app_integ2`, InnoDB, `DB_HOST=127.0.0.1`, `DB_PORT=3306`).
+3. `php artisan install:api`
+4. `php artisan migrate`
+5. `php artisan migrate` (adds `users.role` default `student`)
+6. `php artisan optimize:clear`
+7. `php artisan serve`
+8. Test endpoints in Postman with `Authorization → Bearer Token` and `Accept: application/json`.
 
-## License
+## Evidence screenshots
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+Eight Postman screenshots (secrets/tokens redacted) live in the `screenshots/` folder:
+
+- `01-admin-login.png` — POST `/api/login` (admin) → 200
+- `02-admin-allowed.png` — GET `/api/admin/dashboard` (admin) → 200
+- `03-admin-denied.png` — GET `/api/student/dashboard` (admin) → 403
+- `04-student-login.png` — POST `/api/login` (student) → 200
+- `05-student-allowed.png` — GET `/api/student/dashboard` (student) → 200
+- `06-student-denied.png` — GET `/api/admin/dashboard` (student) → 403
+- `07-shared-route.png` — GET `/api/students` (student) → 200
+- `08-no-token.png` — GET `/api/admin/dashboard` (no token) → 401
+
+## Reflection
+
+- **Authentication vs. authorization:** Authentication verifies *who* the user is (e.g., valid Sanctum Bearer token via `auth:sanctum`). Authorization decides *what* that authenticated user is allowed to do (role check via `CheckRole` / `AdminMiddleware`).
+- **401 vs. 403:** A request without a token is **unauthenticated**, so Sanctum returns **401 Unauthorized**. An authenticated user whose role is not permitted for the endpoint receives **403 Forbidden**.
+
+## Submission
+
+- **Course:** Integrative Programming & Technologies II
+- **Module:** Module 5 — Lesson 2 (RBAC) / Lesson 1 (Secure API)
+- **Submission:** GitHub repository URL + screenshots
